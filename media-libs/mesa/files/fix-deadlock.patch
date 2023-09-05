@@ -1,0 +1,115 @@
+diff --git a/src/panfrost/lib/pan_bo.c b/src/panfrost/lib/pan_bo.c
+index 708fd38..4393514 100644
+--- a/src/panfrost/lib/pan_bo.c
++++ b/src/panfrost/lib/pan_bo.c
+@@ -651,13 +651,10 @@ panfrost_bo_free_gpu(void *data)
+         if (p_atomic_dec_return(&bo->gpu_refcnt))
+                 return;
+ 
+-        pthread_mutex_lock(&dev->bo_map_lock);
+-
+         /* Someone might have imported this BO while we were waiting for the
+          * lock, let's make sure it's still not referenced before freeing it.
+          */
+         if (p_atomic_read(&bo->refcnt) != 0) {
+-                pthread_mutex_unlock(&dev->bo_map_lock);
+                 return;
+         }
+ 
+@@ -673,8 +670,6 @@ panfrost_bo_free_gpu(void *data)
+         }
+ 
+         panfrost_bo_fini(bo);
+-
+-        pthread_mutex_unlock(&dev->bo_map_lock);
+ }
+ 
+ void
+@@ -700,13 +695,10 @@ panfrost_bo_unreference(struct panfrost_bo *bo)
+                 fflush(NULL);
+         }
+ 
+-        pthread_mutex_lock(&dev->bo_map_lock);
+-
+         /* Someone might have imported this BO while we were waiting for the
+          * lock, let's make sure it's still not referenced before freeing it.
+          */
+         if (p_atomic_read(&bo->refcnt) != 0) {
+-                pthread_mutex_unlock(&dev->bo_map_lock);
+                 return;
+         }
+ 
+@@ -722,7 +714,6 @@ panfrost_bo_unreference(struct panfrost_bo *bo)
+                         &bo->gpu_refcnt, panfrost_bo_free_gpu, bo);
+ 
+                 if (added) {
+-                        pthread_mutex_unlock(&dev->bo_map_lock);
+                         return;
+                 }
+         }
+@@ -739,8 +730,6 @@ panfrost_bo_unreference(struct panfrost_bo *bo)
+         }
+ 
+         panfrost_bo_fini(bo);
+-
+-        pthread_mutex_unlock(&dev->bo_map_lock);
+ }
+ 
+ struct panfrost_bo *
+@@ -760,8 +749,6 @@ panfrost_bo_import(struct panfrost_device *dev, int fd)
+                 ret = drmPrimeFDToHandle(dev->fd, fd, &gem_handle);
+                 assert(!ret);
+         }
+-
+-        pthread_mutex_lock(&dev->bo_map_lock);
+         bo = pan_lookup_bo(dev, gem_handle);
+ 
+         bool found = false;
+@@ -790,7 +777,6 @@ panfrost_bo_import(struct panfrost_device *dev, int fd)
+                  * for zero sized maps and fail nicely too
+                  */
+                 if ((bo->size == 0) || (bo->size == (size_t)-1)) {
+-                        pthread_mutex_unlock(&dev->bo_map_lock);
+                         return NULL;
+                 }
+                 bo->flags = PAN_BO_SHARED;
+@@ -825,7 +811,6 @@ panfrost_bo_import(struct panfrost_device *dev, int fd)
+                 else
+                         panfrost_bo_reference(bo);
+         }
+-        pthread_mutex_unlock(&dev->bo_map_lock);
+ 
+         if (dev->bo_log) {
+                 int new_fd = kbase_gem_handle_get(&dev->mali, bo->gem_handle).fd;
+diff --git a/src/panfrost/lib/pan_device.h b/src/panfrost/lib/pan_device.h
+index acb4662..0c7fbe3 100644
+--- a/src/panfrost/lib/pan_device.h
++++ b/src/panfrost/lib/pan_device.h
+@@ -225,7 +225,6 @@ struct panfrost_device {
+         /* Hold this while updating usage field of BOs */
+         pthread_mutex_t bo_usage_lock;
+ 
+-        pthread_mutex_t bo_map_lock;
+         struct stable_array bo_map;
+ 
+         struct {
+diff --git a/src/panfrost/lib/pan_props.c b/src/panfrost/lib/pan_props.c
+index 6d92056..4c8a639 100644
+--- a/src/panfrost/lib/pan_props.c
++++ b/src/panfrost/lib/pan_props.c
+@@ -343,7 +343,6 @@ panfrost_open_device(void *memctx, int fd, struct panfrost_device *dev)
+         stable_array_init(&dev->bo_map, struct panfrost_bo);
+ 
+         pthread_mutex_init(&dev->bo_usage_lock, NULL);
+-        pthread_mutex_init(&dev->bo_map_lock, NULL);
+         pthread_mutex_init(&dev->bo_cache.lock, NULL);
+         list_inithead(&dev->bo_cache.lru);
+ 
+@@ -380,7 +379,6 @@ panfrost_close_device(struct panfrost_device *dev)
+                 panfrost_bo_unreference(dev->sample_positions);
+                 panfrost_bo_cache_evict_all(dev);
+                 pthread_mutex_destroy(&dev->bo_cache.lock);
+-                pthread_mutex_destroy(&dev->bo_map_lock);
+                 pthread_mutex_destroy(&dev->bo_usage_lock);
+                 stable_array_fini(&dev->bo_map);
+         }

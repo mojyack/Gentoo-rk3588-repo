@@ -1,0 +1,19 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 636531e..62e8b11 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -34,14 +34,6 @@ SET_TARGET_PROPERTIES	( ${ly_lib_shared} PROPERTIES PREFIX "lib" )
+ ADD_EXECUTABLE			( yuvconvert ${ly_base_dir}/util/yuvconvert.cc )
+ TARGET_LINK_LIBRARIES	( yuvconvert ${ly_lib_static} )
+ 
+-
+-INCLUDE ( FindJPEG )
+-if (JPEG_FOUND)
+-  include_directories( ${JPEG_INCLUDE_DIR} )
+-  target_link_libraries( yuvconvert ${JPEG_LIBRARY} )
+-  add_definitions( -DHAVE_JPEG )
+-endif()
+-
+ if(TEST)
+   find_library(GTEST_LIBRARY gtest)
+   if(GTEST_LIBRARY STREQUAL "GTEST_LIBRARY-NOTFOUND")
